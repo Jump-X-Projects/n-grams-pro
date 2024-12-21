@@ -1,6 +1,6 @@
 # Jump-n-Grams Streamlit App
 
-A simple Streamlit application for exploring **jump-n-grams** (also known as skip-grams) in text data. This tool lets you upload text, configure parameters (e.g., n-gram size, jump size), and view the most frequent jump-n-grams in both tabular and chart form.
+A simple Streamlit application for exploring **N-Grams** (also known as skip-grams) in text data. This tool lets you upload text, configure parameters (e.g., n-gram size, jump size), and view the most frequent jump-n-grams in both tabular and chart form.
 
 ---
 
@@ -24,13 +24,3 @@ A simple Streamlit application for exploring **jump-n-grams** (also known as ski
 
 - **Download Results**
   Export your jump-n-gram frequency table as a CSV file for further analysis.
-
----
-
-## Installation
-
-1. **Clone the repository**:
-
-   ```bash
-   git clone https://github.com/<YOUR_USERNAME>/<REPO_NAME>.git
-   cd <REPO_NAME>
