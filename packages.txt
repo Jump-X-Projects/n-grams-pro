@@ -1,4 +1,6 @@
 build-essential
+python3-dev
 gcc
 g++
 libstdc++6
+pkg-config
