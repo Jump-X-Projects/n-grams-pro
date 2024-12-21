@@ -3,7 +3,7 @@ import nltk
 from nltk import ngrams
 from nltk.collocations import BigramCollocationFinder, BigramAssocMeasures
 from sklearn.feature_extraction.text import TfidfVectorizer
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 # If you're using collocations, NLTK sometimes needs these:
 # nltk.download('punkt')
@@ -60,16 +60,22 @@ def find_collocations(
 
 def compute_tfidf(
     text_list: List[str],
-    top_n: int = 20
+    top_n: int = 20,
+    min_df: float = 0.0
 ) -> pd.DataFrame:
     """
     Compute TF-IDF for unigrams in the text list and return top N words by average TF-IDF.
     :param text_list: List of preprocessed text strings.
     :param top_n: Number of top words to return.
-    :return: DataFrame with columns: [term, tfidf_score].
+    :param min_df: Minimum document frequency threshold
+    :return: DataFrame with columns: [term, score].
     """
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(text_list)
+    vectorizer = TfidfVectorizer(min_df=min_df)
+    try:
+        tfidf_matrix = vectorizer.fit_transform(text_list)
+    except ValueError as e:
+        # Handle empty text list or all-zero entries
+        return pd.DataFrame(columns=['term', 'score'])
 
     # Average TF-IDF score for each term across all documents
     avg_tfidf = tfidf_matrix.mean(axis=0).A1

@@ -79,15 +79,24 @@ def preprocess_dataframe(
     Apply text preprocessing to an entire dataframe's text column.
     :param df: The DataFrame containing a column of text.
     :param text_column: The column name to preprocess.
-    :param remove_stopwords: ...
-    :param remove_punctuation: ...
-    :param lowercase: ...
-    :param custom_stopwords: ...
+    :param remove_stopwords: Flag to remove stopwords.
+    :param remove_punctuation: Flag to remove punctuation.
+    :param lowercase: Flag to convert text to lowercase.
+    :param custom_stopwords: Additional user-provided stopwords.
     :return: DataFrame with a new column 'processed_text'.
     """
-    df['processed_text'] = df[text_column].astype(str).apply(
+    # Make a copy to avoid SettingWithCopyWarning
+    df = df.copy()
+
+    # Handle missing values
+    df[text_column] = df[text_column].fillna('')
+
+    # Convert to string type using the new pandas string accessor
+    df[text_column] = df[text_column].astype('string')
+
+    df['processed_text'] = df[text_column].apply(
         lambda x: preprocess_text(
-            x,
+            str(x),
             remove_stopwords=remove_stopwords,
             remove_punctuation=remove_punctuation,
             lowercase=lowercase,
