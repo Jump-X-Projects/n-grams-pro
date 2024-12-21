@@ -1,0 +1,3 @@
+libgcc-12-dev
+build-essential
+libstdc++6
