@@ -1,26 +1,19 @@
-# Jump-n-Grams Streamlit App
+# N-Gram Analysis App
 
-A simple Streamlit application for exploring **N-Grams** (also known as skip-grams) in text data. This tool lets you upload text, configure parameters (e.g., n-gram size, jump size), and view the most frequent jump-n-grams in both tabular and chart form.
+This Streamlit app lets you:
 
----
+- Upload or paste text data (including large CSVs up to ~1M rows).
+- Configure text preprocessing options (stopwords removal, punctuation removal, lowercasing).
+- Generate and visualize **n-grams** (unigrams, bigrams, trigrams, etc.).
+- Set frequency thresholds to focus on the most relevant n-grams.
+- (Optional) Compute collocations, TF-IDF, and part-of-speech filtered n-grams.
+- Visualize results in bar charts and word clouds.
+- Download the results for offline analysis.
 
-## Features
+## Installation
 
-- **Upload or Use Sample Data**
-  Option to upload your own `.txt`, `.csv`, or `.md` file, or simply analyze a built-in sample.
+1. Clone this repository:
 
-- **Preprocessing**
-  Choose to lowercase text and/or remove punctuation before generating jump-n-grams.
-
-- **Dynamic Parameter Control**
-  - **N-gram size (n)**: how many tokens make up one n-gram (e.g., 2 for bigrams, 3 for trigrams).
-  - **Jump**: how many tokens to skip between each token in an n-gram. (jump=0 implies standard n-grams.)
-
-- **Fast Computation & Caching**
-  Under the hood, a `@st.cache_data` decorator ensures repeated computations on the same text aren’t re-run.
-
-- **Interactive Visualizations**
-  Bar charts showing the most frequent jump-n-grams, along with a data table you can browse.
-
-- **Download Results**
-  Export your jump-n-gram frequency table as a CSV file for further analysis.
+   ```bash
+   git clone https://github.com/Jump-X-Projects/n-grams-pro.git
+   cd my_n_gram_app
