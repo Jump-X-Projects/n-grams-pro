@@ -4,8 +4,16 @@ import nltk
 from nltk.corpus import stopwords
 from typing import Union, List, Optional, Dict
 
-# Download stopwords if not already present (comment out if you prefer manual download)
-# nltk.download('stopwords')
+# Download required NLTK data
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
 
 STOPWORDS = set(stopwords.words('english'))
 
