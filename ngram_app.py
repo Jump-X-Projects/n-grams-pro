@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from preprocessing import preprocess_dataframe
 from analysis import generate_ngrams, find_collocations, compute_tfidf
-from visualization import plot_ngram_bar_chart, create_word_cloud
+from visualization import plot_ngram_analysis, create_word_cloud
 
 def get_csv_columns(file):
     """Get column names from CSV without loading the entire file."""
@@ -148,7 +148,7 @@ def main():
                 # Display results
                 st.success("Analysis complete!")
 
-                # Show N-gram results
+                # Show N-gram results and performance metrics
                 st.subheader(f"Top {min(20, len(df_ngrams))} {n_value}-grams Analysis")
                 plot_ngram_analysis(
                     df_ngrams,
