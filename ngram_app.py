@@ -149,8 +149,15 @@ def main():
                 st.success("Analysis complete!")
 
                 # Show N-gram results
-                st.subheader(f"Top {min(20, len(df_ngrams))} {n_value}-grams")
-                plot_ngram_bar_chart(df_ngrams)
+                st.subheader(f"Top {min(20, len(df_ngrams))} {n_value}-grams Analysis")
+                plot_ngram_analysis(
+                    df_ngrams,
+                    df,
+                    search_term_col,
+                    cost_col,
+                    conversions_col,
+                    top_k=20
+                )
 
                 # Optional visualizations
                 if n_value <= 2:  # Word cloud only makes sense for unigrams and bigrams
