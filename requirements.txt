@@ -4,9 +4,8 @@ numpy>=1.26.3
 nltk>=3.8.1
 scikit-learn>=1.4.0
 matplotlib>=3.8.2
-spacy>=3.7.2
-setuptools>=69.0.3
 wordcloud>=1.9.3
+altair>=5.2.0
 
-# For the spaCy language model - updated to latest compatible version
-en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+# Add explicit NLTK data download in the code instead of using spacy
+# Remove spacy and its model as they're not essential
