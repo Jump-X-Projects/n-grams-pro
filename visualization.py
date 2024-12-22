@@ -21,17 +21,17 @@ def plot_ngram_analysis(df_ngrams: pd.DataFrame, df_original: pd.DataFrame, sear
     metrics = []
     for ngram in df_top['ngram']:
         # Find search terms containing this n-gram
-        mask = df_original[search_term_col].str.contains(ngram, case=False, na=False)
-        total_cost = df_original.loc[mask, cost_col].sum()
-        total_conversions = df_original.loc[mask, conversions_col].sum()
+        mask = df_original[search_term_col].astype(str).str.contains(str(ngram), case=False, na=False)
+        total_cost = df_original.loc[mask, cost_col].astype(float).sum()
+        total_conversions = df_original.loc[mask, conversions_col].astype(float).sum()
         cpa = total_cost / total_conversions if total_conversions > 0 else 0
 
         metrics.append({
-            'N-gram': ngram,
-            'Frequency': df_top[df_top['ngram'] == ngram]['frequency'].iloc[0],
-            'Total Cost': total_cost,
-            'Total Conversions': total_conversions,
-            'CPA': cpa
+            'N-gram': str(ngram),
+            'Frequency': int(df_top[df_top['ngram'] == ngram]['frequency'].iloc[0]),
+            'Total Cost': float(total_cost),
+            'Total Conversions': int(total_conversions),
+            'CPA': float(cpa)
         })
 
     # Create metrics DataFrame
@@ -81,10 +81,9 @@ def create_word_cloud(df_ngrams: pd.DataFrame, max_words: int = 100):
         st.warning("No data available for word cloud visualization")
         return
 
-    # Convert the frequency table to a dict
-    freq_dict = dict(zip(df_ngrams['ngram'], df_ngrams['frequency']))
+    # Convert to strings and create frequency dict
+    freq_dict = {str(k): float(v) for k, v in zip(df_ngrams['ngram'], df_ngrams['frequency'])}
 
-    # Updated WordCloud configuration
     wc = WordCloud(
         width=800,
         height=400,
