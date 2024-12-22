@@ -14,61 +14,68 @@ def plot_ngram_analysis(df_ngrams: pd.DataFrame, df_original: pd.DataFrame, sear
     :param conversions_col: Name of conversions column
     :param top_k: Number of top n-grams to display
     """
-    # Get top k n-grams
-    df_top = df_ngrams.head(top_k).copy()
+    try:
+        # Get top k n-grams
+        df_top = df_ngrams.head(top_k).copy()
 
-    # Calculate metrics for each n-gram
-    metrics = []
-    for ngram in df_top['ngram']:
-        # Find search terms containing this n-gram
-        mask = df_original[search_term_col].astype(str).str.contains(str(ngram), case=False, na=False)
-        total_cost = df_original.loc[mask, cost_col].astype(float).sum()
-        total_conversions = df_original.loc[mask, conversions_col].astype(float).sum()
-        cpa = total_cost / total_conversions if total_conversions > 0 else 0
+        # Calculate metrics for each n-gram
+        metrics = []
+        for ngram in df_top['ngram']:
+            # Find search terms containing this n-gram
+            mask = df_original[search_term_col].astype(str).str.contains(str(ngram), case=False, na=False)
 
-        metrics.append({
-            'N-gram': str(ngram),
-            'Frequency': int(df_top[df_top['ngram'] == ngram]['frequency'].iloc[0]),
-            'Total Cost': float(total_cost),
-            'Total Conversions': int(total_conversions),
-            'CPA': float(cpa)
-        })
+            # Clean cost values by removing '$' and ',' before converting to float
+            total_cost = df_original.loc[mask, cost_col].apply(lambda x: float(str(x).replace('$', '').replace(',', ''))).sum()
+            total_conversions = df_original.loc[mask, conversions_col].astype(float).sum()
+            cpa = total_cost / total_conversions if total_conversions > 0 else 0
 
-    # Create metrics DataFrame
-    df_metrics = pd.DataFrame(metrics)
+            metrics.append({
+                'N-gram': str(ngram),
+                'Frequency': int(df_top[df_top['ngram'] == ngram]['frequency'].iloc[0]),
+                'Total Cost': float(total_cost),
+                'Total Conversions': int(total_conversions),
+                'CPA': float(cpa)
+            })
 
-    # Format currency columns
-    df_metrics['Total Cost'] = df_metrics['Total Cost'].apply(lambda x: f"${x:,.2f}")
-    df_metrics['CPA'] = df_metrics['CPA'].apply(lambda x: f"${x:,.2f}" if x > 0 else "$0.00")
+        # Create metrics DataFrame
+        df_metrics = pd.DataFrame(metrics)
 
-    # Display table
-    st.dataframe(
-        df_metrics,
-        column_config={
-            'N-gram': st.column_config.TextColumn("N-gram"),
-            'Frequency': st.column_config.NumberColumn("Frequency"),
-            'Total Cost': st.column_config.TextColumn("Total Cost"),
-            'Total Conversions': st.column_config.NumberColumn("Total Conversions"),
-            'CPA': st.column_config.TextColumn("CPA")
-        },
-        hide_index=True
-    )
+        # Format currency columns
+        df_metrics['Total Cost'] = df_metrics['Total Cost'].apply(lambda x: f"${x:,.2f}")
+        df_metrics['CPA'] = df_metrics['CPA'].apply(lambda x: f"${x:,.2f}" if x > 0 else "$0.00")
 
-    # Create and display bar chart
-    chart = (
-        alt.Chart(df_top)
-        .mark_bar()
-        .encode(
-            x=alt.X('frequency:Q', title='Frequency'),
-            y=alt.Y('ngram:N', sort='-x', title='N-gram'),
-            tooltip=['ngram:N', 'frequency:Q']
+        # Display table
+        st.dataframe(
+            df_metrics,
+            column_config={
+                'N-gram': st.column_config.TextColumn("N-gram"),
+                'Frequency': st.column_config.NumberColumn("Frequency"),
+                'Total Cost': st.column_config.TextColumn("Total Cost"),
+                'Total Conversions': st.column_config.NumberColumn("Total Conversions"),
+                'CPA': st.column_config.TextColumn("CPA")
+            },
+            hide_index=True
         )
-        .properties(
-            title=f"Top {top_k} N-grams",
-            height=min(top_k * 25, 500)
+
+        # Create and display bar chart
+        chart = (
+            alt.Chart(df_top)
+            .mark_bar()
+            .encode(
+                x=alt.X('frequency:Q', title='Frequency'),
+                y=alt.Y('ngram:N', sort='-x', title='N-gram'),
+                tooltip=['ngram:N', 'frequency:Q']
+            )
+            .properties(
+                title=f"Top {top_k} N-grams",
+                height=min(top_k * 25, 500)
+            )
         )
-    )
-    st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Error during processing: {str(e)}")
+        st.error("Please check your column selections and try again.")
 
 def create_word_cloud(df_ngrams: pd.DataFrame, max_words: int = 100):
     """
