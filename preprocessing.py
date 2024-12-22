@@ -31,14 +31,38 @@ def load_csv_in_chunks(
     :param max_rows: Maximum number of rows to load overall.
     :return: A pandas DataFrame with text.
     """
-    dfs = []
-    rows_loaded = 0
-    for chunk in pd.read_csv(file, chunksize=chunksize):
-        dfs.append(chunk[[text_column]])
-        rows_loaded += len(chunk)
-        if rows_loaded >= max_rows:
-            break
-    return pd.concat(dfs, ignore_index=True)
+    try:
+        # Read the first chunk to get column names
+        first_chunk = pd.read_csv(file, nrows=1)
+
+        # Check if the column exists (case-sensitive)
+        if text_column not in first_chunk.columns:
+            # Try to find a case-insensitive match
+            col_map = {col.lower(): col for col in first_chunk.columns}
+            if text_column.lower() in col_map:
+                text_column = col_map[text_column.lower()]
+            else:
+                available_columns = "\n- ".join(first_chunk.columns)
+                raise ValueError(f"Column '{text_column}' not found. Available columns are:\n- {available_columns}")
+
+        # Reset file pointer
+        file.seek(0)
+
+        # Read the file in chunks
+        dfs = []
+        rows_loaded = 0
+        for chunk in pd.read_csv(file, chunksize=chunksize):
+            dfs.append(chunk[[text_column]])
+            rows_loaded += len(chunk)
+            if rows_loaded >= max_rows:
+                break
+
+        if not dfs:
+            raise ValueError("No data was read from the file")
+
+        return pd.concat(dfs, ignore_index=True)
+    except Exception as e:
+        raise ValueError(f"Error reading CSV: {str(e)}")
 
 def preprocess_text(
     text: str,
