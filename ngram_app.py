@@ -2,7 +2,14 @@ import streamlit as st
 import pandas as pd
 from preprocessing import preprocess_dataframe
 from analysis import generate_ngrams, find_collocations, compute_tfidf
-from visualization import plot_ngram_analysis, create_word_cloud
+from visualization import (
+    plot_dual_axis_chart,
+    plot_color_coded_bars,
+    plot_side_by_side_bars,
+    plot_heatmap,
+    plot_bubble_chart,
+    create_word_cloud
+)
 
 def get_csv_columns(file):
     """Get column names from CSV without loading the entire file."""
@@ -148,16 +155,59 @@ def main():
                 # Display results
                 st.success("Analysis complete!")
 
-                # Show N-gram results and performance metrics
-                st.subheader(f"Top {min(20, len(df_ngrams))} {n_value}-grams Analysis")
-                plot_ngram_analysis(
-                    df_ngrams,
-                    df,
-                    search_term_col,
-                    cost_col,
-                    conversions_col,
-                    top_k=20
+                # Calculate metrics
+                metrics = []
+                for ngram in df_ngrams.head(20)['ngram']:
+                    mask = df[search_term_col].astype(str).str.contains(str(ngram), case=False, na=False)
+                    total_cost = df.loc[mask, cost_col].apply(lambda x: float(str(x).replace('$', '').replace(',', ''))).sum()
+                    total_conversions = df.loc[mask, conversions_col].astype(float).sum()
+                    cpa = total_cost / total_conversions if total_conversions > 0 else 0
+
+                    metrics.append({
+                        'N-gram': str(ngram),
+                        'Frequency': int(df_ngrams[df_ngrams['ngram'] == ngram]['frequency'].iloc[0]),
+                        'Total Cost': float(total_cost),
+                        'Total Conversions': int(total_conversions),
+                        'CPA': float(cpa),
+                        'CPA_float': float(cpa),
+                        'Total_Cost_float': float(total_cost)
+                    })
+
+                df_metrics = pd.DataFrame(metrics)
+
+                # Format currency columns for display
+                df_metrics_display = df_metrics.copy()
+                df_metrics_display['Total Cost'] = df_metrics_display['Total Cost'].apply(lambda x: f"${x:,.2f}")
+                df_metrics_display['CPA'] = df_metrics_display['CPA'].apply(lambda x: f"${x:,.2f}" if x > 0 else "$0.00")
+
+                # Display metrics table
+                st.dataframe(
+                    df_metrics_display[['N-gram', 'Frequency', 'Total Cost', 'Total Conversions', 'CPA']],
+                    column_config={
+                        'N-gram': st.column_config.TextColumn("N-gram"),
+                        'Frequency': st.column_config.NumberColumn("Frequency"),
+                        'Total Cost': st.column_config.TextColumn("Total Cost"),
+                        'Total Conversions': st.column_config.NumberColumn("Total Conversions"),
+                        'CPA': st.column_config.TextColumn("CPA")
+                    },
+                    hide_index=True
                 )
+
+                # Display all visualization options
+                st.subheader("1. Dual Axis Bar/Line Chart")
+                plot_dual_axis_chart(df_metrics)
+
+                st.subheader("2. Color-Coded Bars (by CPA)")
+                plot_color_coded_bars(df_metrics)
+
+                st.subheader("3. Side-by-Side Bars")
+                plot_side_by_side_bars(df_metrics)
+
+                st.subheader("4. Heat Map")
+                plot_heatmap(df_metrics)
+
+                st.subheader("5. Bubble Chart")
+                plot_bubble_chart(df_metrics)
 
                 # Optional visualizations
                 if n_value <= 2:  # Word cloud only makes sense for unigrams and bigrams
@@ -165,7 +215,7 @@ def main():
                     create_word_cloud(df_ngrams)
 
                 # Allow download of results
-                csv_data = df_ngrams.to_csv(index=False)
+                csv_data = df_metrics_display.to_csv(index=False)
                 st.download_button(
                     label="Download Results as CSV",
                     data=csv_data,
