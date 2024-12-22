@@ -1,168 +1,174 @@
 import streamlit as st
 import pandas as pd
-from preprocessing import load_csv_in_chunks, preprocess_dataframe
+from preprocessing import preprocess_dataframe
 from analysis import generate_ngrams, find_collocations, compute_tfidf
 from visualization import plot_ngram_bar_chart, create_word_cloud
 
-# Optional if using spaCy for advanced POS filtering
-# import spacy
-# nlp = spacy.load("en_core_web_sm")
-
-########################################################
-# Streamlit App
-########################################################
+def get_csv_columns(file):
+    """Get column names from CSV without loading the entire file."""
+    try:
+        # Read just the header row
+        df_header = pd.read_csv(file, nrows=0)
+        return list(df_header.columns)
+    except Exception as e:
+        st.error(f"Error reading CSV headers: {str(e)}")
+        return []
+    finally:
+        # Reset file pointer to beginning
+        file.seek(0)
 
 def main():
     st.title("N-Gram Analysis Tool")
     st.write(
-        "Upload a CSV of up to ~1 million rows or paste your own text. "
-        "Configure preprocessing and generate n-grams, collocations, and TF-IDF."
+        "Upload a CSV file to analyze search terms and their performance metrics. "
+        "Follow the steps below to configure your analysis."
     )
 
     ########################################################
-    # Sidebar for configuration
+    # Step 1: File Upload
     ########################################################
-    st.sidebar.header("Configuration")
+    st.subheader("Step 1: Upload Your CSV File")
+    uploaded_file = st.file_uploader("Choose a CSV file", type=["csv"])
 
-    data_source = st.sidebar.radio("Data Source", ["Upload CSV", "Paste Text"])
+    if not uploaded_file:
+        st.info("Please upload a CSV file to begin.")
+        return
 
-    remove_stop = st.sidebar.checkbox("Remove Stopwords", value=True)
-    remove_punc = st.sidebar.checkbox("Remove Punctuation", value=True)
-    to_lower = st.sidebar.checkbox("Lowercase", value=True)
-
-    custom_sw = st.sidebar.text_area("Custom Stopwords (comma-separated)", "")
-    custom_sw_list = [w.strip() for w in custom_sw.split(",") if w.strip()]
-
-    ########################################################
-    # Step 1: Load Data
-    ########################################################
-
-    df = pd.DataFrame()
-    text_column = "text"  # default column name if uploading CSV
-
-    if data_source == "Upload CSV":
-        uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=["csv"])
-
-        if uploaded_file is not None:
-            # Ask user for the column containing text
-            text_column = st.sidebar.text_input("Text Column Name", value="text")
-            st.write("Loading data... (may take a moment for large files)")
-            # Load in chunks to handle up to ~1m rows
-            df = load_csv_in_chunks(
-                file=uploaded_file,
-                text_column=text_column,
-                chunksize=100000,
-                max_rows=1000000
-            )
-            st.write(f"Loaded {len(df)} rows from CSV.")
-
-    else:  # Paste Text
-        raw_text = st.sidebar.text_area("Paste your text here")
-        if raw_text:
-            df = pd.DataFrame({text_column: [raw_text]})
-            st.write("Using pasted text.")
-
-    if df.empty:
-        st.warning("No data loaded yet. Please upload a CSV or paste text.")
+    # Get column names after file upload
+    columns = get_csv_columns(uploaded_file)
+    if not columns:
+        st.error("Could not read column names from the CSV file.")
         return
 
     ########################################################
-    # Step 2: Preprocess Data
+    # Step 2: Column Selection
     ########################################################
-    st.write("Preprocessing text...")
-    df = preprocess_dataframe(
-        df,
-        text_column=text_column,
-        remove_stopwords=remove_stop,
-        remove_punctuation=remove_punc,
-        lowercase=to_lower,
-        custom_stopwords=custom_sw_list
-    )
+    st.subheader("Step 2: Select Your Columns")
 
-    # We now have a 'processed_text' column
-    st.success("Preprocessing complete!")
+    col1, col2 = st.columns(2)
 
-    ########################################################
-    # Step 3: N-Gram Generation
-    ########################################################
-    st.subheader("N-Gram Analysis")
-    n_value = st.selectbox("N-gram size", [1, 2, 3, 4, 5], index=0)
-    freq_threshold = st.slider(
-        "Frequency Threshold (exclude n-grams below this count)",
-        min_value=1, max_value=50, value=1
-    )
-
-    if st.button("Generate N-Grams"):
-        st.write("Generating N-Grams...")
-        df_ngrams = generate_ngrams(
-            df['processed_text'].tolist(),
-            n=n_value,
-            freq_threshold=freq_threshold
+    with col1:
+        search_term_col = st.selectbox(
+            "Search Terms Column",
+            options=columns,
+            help="Select the column containing your search terms"
         )
-        st.write(f"Found {len(df_ngrams)} n-grams (after filtering).")
 
-        if not df_ngrams.empty:
-            plot_ngram_bar_chart(df_ngrams)
+        cost_col = st.selectbox(
+            "Cost Column",
+            options=columns,
+            help="Select the column containing cost data"
+        )
 
-            # Word Cloud (optional, more relevant for small n-values)
-            if n_value <= 2:
-                create_word_cloud(df_ngrams)
-
-            # Allow download
-            csv_data = df_ngrams.to_csv(index=False)
-            st.download_button(
-                label="Download N-Grams as CSV",
-                data=csv_data,
-                file_name="n_grams.csv",
-                mime="text/csv"
-            )
-        else:
-            st.warning("No n-grams to display with the current threshold.")
+    with col2:
+        conversions_col = st.selectbox(
+            "Conversions Column",
+            options=columns,
+            help="Select the column containing conversion data"
+        )
 
     ########################################################
-    # Step 4: Collocation (optional)
+    # Step 3: Preprocessing Options
     ########################################################
-    st.subheader("Collocation Detection (Optional)")
-    if st.checkbox("Run Bigram Collocation Detection?"):
-        colloc_freq_threshold = st.slider("Collocation Frequency Filter", 2, 20, 2)
-        colloc_top_n = st.slider("Show Top N Collocations", 5, 50, 20)
+    st.subheader("Step 3: Configure Preprocessing")
 
-        if st.button("Find Collocations"):
-            st.write("Finding collocations...")
-            collocations = find_collocations(
-                df['processed_text'].tolist(),
-                freq_threshold=colloc_freq_threshold,
-                top_n=colloc_top_n
-            )
-            if collocations:
-                st.write("Top Collocations (word1, word2, PMI):")
-                for (w1, w2), score in collocations:
-                    st.write(f"**{w1} {w2}**: {score:.4f}")
-            else:
-                st.write("No collocations found.")
+    col3, col4 = st.columns(2)
+
+    with col3:
+        remove_stop = st.checkbox("Remove Stopwords", value=True)
+        remove_punc = st.checkbox("Remove Punctuation", value=True)
+
+    with col4:
+        to_lower = st.checkbox("Lowercase", value=True)
+        custom_sw = st.text_area(
+            "Custom Stopwords (comma-separated)",
+            placeholder="Enter any additional words to remove, separated by commas"
+        )
+
+    custom_sw_list = [w.strip() for w in custom_sw.split(",") if w.strip()]
 
     ########################################################
-    # Step 5: TF-IDF (optional)
+    # Step 4: Analysis Configuration
     ########################################################
-    st.subheader("TF-IDF Analysis (Optional)")
-    if st.checkbox("Compute TF-IDF for top words?"):
-        tfidf_top_n = st.slider("Top N Terms by TF-IDF", 5, 50, 20)
+    st.subheader("Step 4: Configure Analysis")
 
-        if st.button("Compute TF-IDF"):
-            st.write("Computing TF-IDF... (this may take a moment)")
-            df_tfidf = compute_tfidf(df['processed_text'].tolist(), top_n=tfidf_top_n)
-            st.write(df_tfidf)
+    col5, col6 = st.columns(2)
 
-            # Allow download
-            csv_data = df_tfidf.to_csv(index=False)
-            st.download_button(
-                label="Download TF-IDF as CSV",
-                data=csv_data,
-                file_name="tfidf_scores.csv",
-                mime="text/csv"
-            )
+    with col5:
+        n_value = st.selectbox(
+            "N-gram size",
+            options=[1, 2, 3, 4, 5],
+            index=1,
+            help="Size of n-grams to generate (1=unigrams, 2=bigrams, etc.)"
+        )
 
-    st.write("Done!")
+    with col6:
+        freq_threshold = st.slider(
+            "Minimum Frequency",
+            min_value=1,
+            max_value=50,
+            value=2,
+            help="Exclude n-grams appearing less than this many times"
+        )
+
+    ########################################################
+    # Step 5: Process Button
+    ########################################################
+    st.subheader("Step 5: Run Analysis")
+
+    if st.button("Process Data", type="primary"):
+        with st.spinner("Processing your data..."):
+            try:
+                # Read the CSV
+                df = pd.read_csv(uploaded_file)
+
+                # Basic validation
+                required_columns = [search_term_col, cost_col, conversions_col]
+                if len(set(required_columns)) != len(required_columns):
+                    st.error("Please select different columns for each field.")
+                    return
+
+                # Preprocess the search terms
+                df_processed = preprocess_dataframe(
+                    df,
+                    text_column=search_term_col,
+                    remove_stopwords=remove_stop,
+                    remove_punctuation=remove_punc,
+                    lowercase=to_lower,
+                    custom_stopwords=custom_sw_list
+                )
+
+                # Generate n-grams
+                df_ngrams = generate_ngrams(
+                    df_processed['processed_text'].tolist(),
+                    n=n_value,
+                    freq_threshold=freq_threshold
+                )
+
+                # Display results
+                st.success("Analysis complete!")
+
+                # Show N-gram results
+                st.subheader(f"Top {min(20, len(df_ngrams))} {n_value}-grams")
+                plot_ngram_bar_chart(df_ngrams)
+
+                # Optional visualizations
+                if n_value <= 2:  # Word cloud only makes sense for unigrams and bigrams
+                    st.subheader("Word Cloud Visualization")
+                    create_word_cloud(df_ngrams)
+
+                # Allow download of results
+                csv_data = df_ngrams.to_csv(index=False)
+                st.download_button(
+                    label="Download Results as CSV",
+                    data=csv_data,
+                    file_name="ngram_analysis_results.csv",
+                    mime="text/csv"
+                )
+
+            except Exception as e:
+                st.error(f"Error during processing: {str(e)}")
+                st.error("Please check your column selections and try again.")
 
 if __name__ == "__main__":
     main()
