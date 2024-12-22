@@ -2,14 +2,12 @@ import streamlit as st
 import pandas as pd
 from preprocessing import preprocess_dataframe
 from analysis import generate_ngrams, find_collocations, compute_tfidf
-from visualization import (
-    plot_dual_axis_chart,
-    plot_color_coded_bars,
-    plot_side_by_side_bars,
-    plot_heatmap,
-    plot_bubble_chart,
-    create_word_cloud
-)
+from visualization import plot_dual_axis_chart
+from visualization import plot_color_coded_bars
+from visualization import plot_side_by_side_bars
+from visualization import plot_heatmap
+from visualization import plot_bubble_chart
+from visualization import create_word_cloud
 
 def get_csv_columns(file):
     """Get column names from CSV without loading the entire file."""
