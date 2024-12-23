@@ -1,4 +1,4 @@
-# N-Gram Analysis App
+# N-Gram Analysis App (Pro Version)
 
 This Streamlit app lets you:
 
