@@ -8,30 +8,28 @@ SCOPES = ['https://www.googleapis.com/auth/adwords']
 def main():
     print("Current directory:", os.getcwd())
     print("Looking for credentials file...")
-    
+
     files = [f for f in os.listdir() if f.startswith('client_secret') and f.endswith('.json')]
-    
+
     if not files:
         print("No credentials file found! Please ensure the client_secret*.json file is in this directory.")
         return
-        
+
     credentials_file = files[0]
     print(f"Found credentials file: {credentials_file}")
 
-    # Create the flow using the client secrets file from the Google API Console
+    # Create flow using the client secrets file
     flow = InstalledAppFlow.from_client_secrets_file(
         credentials_file,
         scopes=SCOPES,
-        redirect_uri='http://localhost:8501/callback'  # Specify exact callback path
+        redirect_uri='http://localhost:8080'  # Changed from 8501
     )
 
-    # Run the OAuth flow with specific parameters
+    # Run the OAuth flow
     flow.run_local_server(
-        host='localhost',
-        port=8501,
-        authorization_prompt_message='Please visit this URL to authorize this application: {url}',
-        success_message='The authentication flow has completed. You may close this window.',
-        open_browser=True
+        port=8080,  # Match the port in redirect_uri
+        prompt='consent',
+        access_type='offline'
     )
 
     # Get credentials and print refresh token
