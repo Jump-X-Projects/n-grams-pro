@@ -4,12 +4,14 @@ import pandas as pd
 import streamlit as st
 import re
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
 
 class GoogleAdsConnector:
     def __init__(self):
         self.client = None
+        self.api_version = 'v14'  # Explicitly set API version
 
     def validate_customer_id(self, customer_id):
         """Validate customer ID format"""
@@ -39,19 +41,15 @@ class GoogleAdsConnector:
                 'client_secret': st.secrets["google_ads"]["client_secret"],
                 'refresh_token': st.secrets["google_ads"]["refresh_token"],
                 'login_customer_id': st.secrets["google_ads"]["login_customer_id"],
-                'use_proto_plus': True
+                'use_proto_plus': True,
+                'version': self.api_version
             }
 
-            logger.info("Credentials loaded from secrets")
+            logger.info(f"Initializing Google Ads client with API version {self.api_version}")
             logger.info(f"Using login_customer_id: {credentials['login_customer_id']}")
 
             self.client = GoogleAdsClient.load_from_dict(credentials)
             logger.info("Successfully created Google Ads client")
-
-            # Test the connection
-            service = self.client.get_service("GoogleAdsService")
-            logger.info("Successfully got Google Ads service")
-
             return True
 
         except Exception as e:
@@ -77,30 +75,32 @@ class GoogleAdsConnector:
                     return None
 
             logger.info("Getting Google Ads service...")
-            ga_service = self.client.get_service("GoogleAdsService")
+            ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
+            logger.info("Successfully got Google Ads service")
 
-            # Start with a simpler test query
-            test_query = """
+            # Basic test query first
+            test_query = f"""
                 SELECT
-                    customer.id
-                FROM customer
+                    campaign.id,
+                    campaign.name
+                FROM campaign
                 LIMIT 1
             """
 
             logger.info("Testing connection with simple query...")
             try:
-                stream = ga_service.search_stream(
+                response = ga_service.search(
                     customer_id=customer_id,
                     query=test_query
                 )
-                for batch in stream:
-                    logger.info("Successfully executed test query")
+                logger.info("Test query successful")
             except Exception as e:
                 logger.error(f"Test query failed: {str(e)}")
-                raise
+                st.error(f"Connection test failed: {str(e)}")
+                return None
 
-            # If test succeeds, proceed with main query
-            query = """
+            # Main query for search terms
+            query = f"""
                 SELECT
                     search_term_view.search_term,
                     metrics.cost_micros,
@@ -109,24 +109,23 @@ class GoogleAdsConnector:
                     metrics.clicks
                 FROM search_term_view
                 WHERE segments.date DURING {date_range}
-            """.format(date_range=date_range)
+            """
 
             logger.info("Executing search terms query...")
-            search_terms_data = []
-            stream = ga_service.search_stream(
+            response = ga_service.search(
                 customer_id=customer_id,
                 query=query
             )
 
-            for batch in stream:
-                for row in batch.results:
-                    search_terms_data.append({
-                        'search_term': row.search_term_view.search_term,
-                        'cost': row.metrics.cost_micros / 1000000,
-                        'conversions': row.metrics.conversions,
-                        'impressions': row.metrics.impressions,
-                        'clicks': row.metrics.clicks
-                    })
+            search_terms_data = []
+            for row in response:
+                search_terms_data.append({
+                    'search_term': row.search_term_view.search_term,
+                    'cost': row.metrics.cost_micros / 1000000,
+                    'conversions': row.metrics.conversions,
+                    'impressions': row.metrics.impressions,
+                    'clicks': row.metrics.clicks
+                })
 
             if not search_terms_data:
                 st.warning("No search terms data found for the specified date range")
