@@ -17,7 +17,7 @@ from visualization import (
     plot_side_by_side_bars,
     plot_heatmap,
     plot_bubble_chart,
-    plot_ads_performance_metrics
+    plot_ngram_analysis
 )
 
 st.set_page_config(
@@ -67,25 +67,25 @@ def main():
                 "Customer ID (without dashes)",
                 help="Your Google Ads account ID"
             )
-            
+
             date_range = st.selectbox(
                 "Date Range",
                 ["LAST_30_DAYS", "LAST_7_DAYS", "LAST_14_DAYS", "LAST_90_DAYS"],
                 help="Select the time period for search terms"
             )
-            
+
             if st.button("Fetch Google Ads Data"):
                 with st.spinner("Fetching data from Google Ads..."):
                     connector = GoogleAdsConnector()
                     df = connector.get_search_terms_report(customer_id, date_range)
-                    
+
                     if df is not None:
                         st.session_state['df'] = df
                         st.session_state['search_term_col'] = 'search_term'
                         st.session_state['cost_col'] = 'cost'
                         st.session_state['conversions_col'] = 'conversions'
                         st.success("Data fetched successfully!")
-                        
+
                         # Show data preview
                         st.write("Data Preview:")
                         st.dataframe(df.head())
@@ -100,21 +100,21 @@ def main():
         if uploaded_file:
             try:
                 df = pd.read_csv(uploaded_file)
-                
+
                 # Column selection
                 st.subheader("Select Your Columns")
                 cols = list(df.columns)
-                
+
                 search_term_col = st.selectbox("Search Terms Column", cols)
                 cost_col = st.selectbox("Cost Column", cols)
                 conversions_col = st.selectbox("Conversions Column", cols)
-                
+
                 # Store in session state
                 st.session_state['df'] = df
                 st.session_state['search_term_col'] = search_term_col
                 st.session_state['cost_col'] = cost_col
                 st.session_state['conversions_col'] = conversions_col
-                
+
             except Exception as e:
                 st.error(f"Error reading CSV: {str(e)}")
                 return
@@ -122,7 +122,7 @@ def main():
     # Analysis Configuration
     if 'df' in st.session_state:
         st.subheader("Configure Analysis")
-        
+
         # Preprocessing options
         with st.expander("Preprocessing Options", expanded=True):
             col1, col2 = st.columns(2)
@@ -160,17 +160,17 @@ def main():
             with st.spinner("Processing data..."):
                 try:
                     df = st.session_state['df']
-                    
+
                     # Validate numeric columns
                     df = validate_numeric_columns(
                         df,
                         st.session_state['cost_col'],
                         st.session_state['conversions_col']
                     )
-                    
+
                     if df is None:
                         return
-                    
+
                     # Preprocess text
                     df_processed = preprocess_dataframe(
                         df,
@@ -180,54 +180,40 @@ def main():
                         lowercase=to_lower,
                         custom_stopwords=custom_sw_list
                     )
-                    
+
                     # Generate n-grams
                     df_ngrams = generate_ngrams(
                         df_processed['processed_text'].tolist(),
                         n=n_value,
                         freq_threshold=freq_threshold
                     )
-                    
+
                     # Calculate metrics
                     df_metrics = compute_ads_metrics(
-                        df, 
+                        df,
                         df_ngrams,
                         st.session_state['search_term_col'],
                         st.session_state['cost_col'],
                         st.session_state['conversions_col']
                     )
-                    
+
                     # Display results
                     st.success("Analysis complete!")
-                    
-                    # Show metrics table
-                    st.subheader("N-gram Analysis Results")
-                    st.dataframe(
-                        df_metrics[['N-gram', 'Frequency', 'Total Cost', 'Total Conversions', 'CPA']],
-                        hide_index=True
+
+                    # Show metrics table and visualizations using plot_ngram_analysis
+                    plot_ngram_analysis(
+                        df_ngrams=df_ngrams,
+                        df_original=df,
+                        search_term_col=st.session_state['search_term_col'],
+                        cost_col=st.session_state['cost_col'],
+                        conversions_col=st.session_state['conversions_col']
                     )
-                    
-                    # Show visualizations
-                    st.subheader("1. Performance Overview")
-                    plot_dual_axis_chart(df_metrics)
-                    
-                    st.subheader("2. Cost Distribution")
-                    plot_color_coded_bars(df_metrics)
-                    
-                    st.subheader("3. Comparative Analysis")
-                    plot_side_by_side_bars(df_metrics)
-                    
-                    st.subheader("4. Performance Heatmap")
-                    plot_heatmap(df_metrics)
-                    
-                    st.subheader("5. ROI Analysis")
-                    plot_bubble_chart(df_metrics)
-                    
+
                     # Word cloud for unigrams and bigrams
                     if n_value <= 2:
                         st.subheader("Word Cloud Visualization")
                         create_word_cloud(df_ngrams)
-                    
+
                     # Download results
                     csv = df_metrics.to_csv(index=False)
                     st.download_button(
@@ -237,9 +223,10 @@ def main():
                         "text/csv",
                         key='download-csv'
                     )
-                    
+
                 except Exception as e:
                     st.error(f"Error during processing: {str(e)}")
+                    logger.error(f"Processing error: {str(e)}", exc_info=True)
 
 if __name__ == "__main__":
     main()
