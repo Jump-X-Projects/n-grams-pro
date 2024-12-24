@@ -36,6 +36,7 @@ class GoogleAdsConnector:
     def __init__(self):
         self.client = None
         self.api_version = 'v14'
+        self.mcc_id = None
 
     def validate_customer_id(self, customer_id):
         """Validate customer ID format"""
@@ -59,7 +60,6 @@ class GoogleAdsConnector:
     def initialize_client(self):
         """Initialize Google Ads client with credentials from Streamlit secrets"""
         try:
-            # Verify all required secrets are present
             required_secrets = [
                 "developer_token",
                 "client_id",
@@ -74,6 +74,10 @@ class GoogleAdsConnector:
                 if not value:
                     raise KeyError(f"Missing required Google Ads credential: {secret}")
                 credentials[secret] = value
+
+            # Store MCC ID
+            self.mcc_id = str(credentials["login_customer_id"]).strip()
+            self.mcc_id = re.sub(r'[-\s]', '', self.mcc_id)
 
             credentials['use_proto_plus'] = True
             credentials['version'] = self.api_version
@@ -90,6 +94,32 @@ class GoogleAdsConnector:
         except Exception as e:
             st.error(f"Failed to initialize Google Ads client: {str(e)}")
             logger.error("Client initialization error", exc_info=True)
+            return False
+
+    def verify_account_access(self, customer_id):
+        """Verify if the customer ID is accessible under the MCC account"""
+        try:
+            ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
+            
+            # Query to check if the account exists and is accessible
+            query = f"""
+                SELECT
+                    customer.id
+                FROM customer
+                WHERE customer.id = '{customer_id}'
+            """
+            
+            # Execute query from MCC account
+            response = ga_service.search(
+                customer_id=self.mcc_id,
+                query=query
+            )
+            
+            # Check if we got any results
+            return any(True for _ in response)
+            
+        except Exception as e:
+            logger.error(f"Error verifying account access: {str(e)}")
             return False
 
     @timeout_handler(timeout_duration=60)
@@ -109,26 +139,12 @@ class GoogleAdsConnector:
                 if not self.initialize_client():
                     return None
 
-            ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
-
-            # Test query with timeout
-            test_query = """
-                SELECT
-                    campaign.id,
-                    campaign.name
-                FROM campaign
-                LIMIT 1
-            """
-
-            try:
-                response = ga_service.search(
-                    customer_id=customer_id,
-                    query=test_query
-                )
-            except Exception as e:
-                logger.error(f"Test query failed: {str(e)}")
-                st.error("Failed to connect to your Google Ads account. Please verify your customer ID.")
+            # Verify account access
+            if not self.verify_account_access(customer_id):
+                st.error(f"Account {customer_id} is not accessible under your MCC account {self.mcc_id}")
                 return None
+
+            ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
 
             # Main query for search terms
             query = f"""
