@@ -5,8 +5,57 @@ from nltk.collocations import BigramCollocationFinder, BigramAssocMeasures
 from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import List, Optional, Tuple, Dict
 
-# If you're using collocations, NLTK sometimes needs these:
-# nltk.download('punkt')
+def compute_ads_metrics(
+    df_original: pd.DataFrame,
+    df_ngrams: pd.DataFrame,
+    search_term_col: str,
+    cost_col: str,
+    conversions_col: str
+) -> pd.DataFrame:
+    """
+    Compute advertising metrics for each n-gram.
+
+    Parameters:
+    -----------
+    df_original : pandas.DataFrame
+        Original DataFrame with search terms and metrics
+    df_ngrams : pandas.DataFrame
+        DataFrame with n-grams and their frequencies
+    search_term_col : str
+        Name of column containing search terms
+    cost_col : str
+        Name of column containing cost data
+    conversions_col : str
+        Name of column containing conversion data
+
+    Returns:
+    --------
+    pandas.DataFrame
+        DataFrame with n-grams and their associated metrics
+    """
+    metrics = []
+
+    for ngram in df_ngrams['ngram']:
+        # Find search terms containing this n-gram
+        mask = df_original[search_term_col].astype(str).str.contains(str(ngram), case=False, na=False)
+
+        # Calculate metrics
+        total_cost = df_original.loc[mask, cost_col].astype(float).sum()
+        total_conversions = df_original.loc[mask, conversions_col].astype(float).sum()
+        frequency = int(df_ngrams[df_ngrams['ngram'] == ngram]['frequency'].iloc[0])
+
+        # Calculate CPA (Cost Per Acquisition)
+        cpa = total_cost / total_conversions if total_conversions > 0 else 0
+
+        metrics.append({
+            'N-gram': ngram,
+            'Frequency': frequency,
+            'Total Cost': total_cost,
+            'Total Conversions': total_conversions,
+            'CPA': cpa
+        })
+
+    return pd.DataFrame(metrics)
 
 def generate_ngrams(
     text_list: List[str],
@@ -55,7 +104,6 @@ def find_collocations(
     )
     finder.apply_freq_filter(freq_threshold)
     scored = finder.score_ngrams(bigram_measures.pmi)
-    # Return top_n bigrams sorted by PMI
     return scored[:top_n]
 
 def compute_tfidf(
