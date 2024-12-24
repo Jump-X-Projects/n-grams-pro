@@ -96,17 +96,20 @@ class GoogleAdsConnector:
             logger.error("Client initialization error", exc_info=True)
             return False
 
-    def verify_account_access(self, customer_id):
-        """Verify if the customer ID is accessible under the MCC account"""
+    def get_accessible_accounts(self):
+        """Get list of all accessible accounts under the MCC"""
         try:
             ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
             
-            # Query to check if the account exists and is accessible
-            query = f"""
+            # Query to get all accessible accounts
+            query = """
                 SELECT
-                    customer.id
-                FROM customer
-                WHERE customer.id = '{customer_id}'
+                    customer_client.id,
+                    customer_client.descriptive_name,
+                    customer_client.status
+                FROM customer_client
+                WHERE customer_client.status = 'ENABLED'
+                ORDER BY customer_client.descriptive_name
             """
             
             # Execute query from MCC account
@@ -115,12 +118,25 @@ class GoogleAdsConnector:
                 query=query
             )
             
-            # Check if we got any results
-            return any(True for _ in response)
+            accounts = []
+            for row in response:
+                account = {
+                    'id': row.customer_client.id,
+                    'name': row.customer_client.descriptive_name,
+                    'status': row.customer_client.status
+                }
+                accounts.append(account)
             
+            return accounts
+            
+        except GoogleAdsException as ex:
+            logger.error("Failed to get accessible accounts")
+            for error in ex.failure.errors:
+                logger.error(f"\tError with Message: {error.message}")
+            return []
         except Exception as e:
-            logger.error(f"Error verifying account access: {str(e)}")
-            return False
+            logger.error(f"Error getting accessible accounts: {str(e)}")
+            return []
 
     @timeout_handler(timeout_duration=60)
     def get_search_terms_report(self, customer_id, date_range='LAST_30_DAYS'):
@@ -138,11 +154,6 @@ class GoogleAdsConnector:
                 logger.info("No client found, attempting to initialize...")
                 if not self.initialize_client():
                     return None
-
-            # Verify account access
-            if not self.verify_account_access(customer_id):
-                st.error(f"Account {customer_id} is not accessible under your MCC account {self.mcc_id}")
-                return None
 
             ga_service = self.client.get_service("GoogleAdsService", version=self.api_version)
 

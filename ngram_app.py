@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 
 # Configure logging with size limits and rotation
 logging.basicConfig(
-    level=logging.INFO,  # Change to INFO level for production
+    level=logging.INFO,
     handlers=[
         RotatingFileHandler(
             'app.log',
@@ -59,31 +59,43 @@ def main():
                 return
 
             with st.expander("Google Ads Configuration", expanded=True):
-                customer_id = st.text_input(
-                    "Customer ID (without dashes)",
-                    help="Your Google Ads account ID"
-                )
-
-                date_range = st.selectbox(
-                    "Date Range",
-                    ["LAST_30_DAYS", "LAST_7_DAYS", "LAST_14_DAYS", "LAST_90_DAYS"],
-                    help="Select the time period for search terms"
-                )
-
-                if st.button("Fetch Google Ads Data"):
-                    with st.spinner("Connecting to Google Ads..."):
-                        from google_ads_connector import GoogleAdsConnector
-                        connector = GoogleAdsConnector()
+                from google_ads_connector import GoogleAdsConnector
+                connector = GoogleAdsConnector()
+                
+                if connector.initialize_client():
+                    st.success("Connected to Google Ads!")
+                    
+                    # Get list of accessible accounts
+                    accounts = connector.get_accessible_accounts()
+                    
+                    if accounts:
+                        st.write("### Select Account")
+                        account_options = {f"{acc['name']} ({acc['id']})": acc['id'] for acc in accounts}
+                        selected_account = st.selectbox(
+                            "Choose an account",
+                            options=list(account_options.keys()),
+                            format_func=lambda x: x
+                        )
                         
-                        if connector.initialize_client():
-                            st.success("Connected to Google Ads!")
-                            if customer_id:
-                                data = connector.get_search_terms_report(customer_id, date_range)
-                                if data is not None:
-                                    st.write("Data fetched successfully!")
-                                    st.dataframe(data)
-                        else:
-                            st.error("Failed to connect to Google Ads. Please check your credentials.")
+                        if selected_account:
+                            customer_id = account_options[selected_account]
+                            
+                            date_range = st.selectbox(
+                                "Date Range",
+                                ["LAST_30_DAYS", "LAST_7_DAYS", "LAST_14_DAYS", "LAST_90_DAYS"],
+                                help="Select the time period for search terms"
+                            )
+
+                            if st.button("Fetch Google Ads Data"):
+                                with st.spinner("Fetching search terms data..."):
+                                    data = connector.get_search_terms_report(customer_id, date_range)
+                                    if data is not None:
+                                        st.write("Data fetched successfully!")
+                                        st.dataframe(data)
+                    else:
+                        st.error("No accessible accounts found under your MCC account. Please verify your permissions.")
+                else:
+                    st.error("Failed to connect to Google Ads. Please check your credentials.")
         else:
             st.info("CSV upload functionality coming soon!")
             uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
