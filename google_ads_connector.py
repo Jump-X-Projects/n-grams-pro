@@ -42,9 +42,16 @@ class GoogleAdsConnector:
                 'use_proto_plus': True
             }
 
-            logger.info("Attempting to create Google Ads client...")
+            logger.info("Credentials loaded from secrets")
+            logger.info(f"Using login_customer_id: {credentials['login_customer_id']}")
+
             self.client = GoogleAdsClient.load_from_dict(credentials)
             logger.info("Successfully created Google Ads client")
+
+            # Test the connection
+            service = self.client.get_service("GoogleAdsService")
+            logger.info("Successfully got Google Ads service")
+
             return True
 
         except Exception as e:
@@ -71,8 +78,28 @@ class GoogleAdsConnector:
 
             logger.info("Getting Google Ads service...")
             ga_service = self.client.get_service("GoogleAdsService")
-            logger.info("Successfully got Google Ads service")
 
+            # Start with a simpler test query
+            test_query = """
+                SELECT
+                    customer.id
+                FROM customer
+                LIMIT 1
+            """
+
+            logger.info("Testing connection with simple query...")
+            try:
+                stream = ga_service.search_stream(
+                    customer_id=customer_id,
+                    query=test_query
+                )
+                for batch in stream:
+                    logger.info("Successfully executed test query")
+            except Exception as e:
+                logger.error(f"Test query failed: {str(e)}")
+                raise
+
+            # If test succeeds, proceed with main query
             query = """
                 SELECT
                     search_term_view.search_term,
@@ -84,7 +111,7 @@ class GoogleAdsConnector:
                 WHERE segments.date DURING {date_range}
             """.format(date_range=date_range)
 
-            logger.info("Executing search stream query...")
+            logger.info("Executing search terms query...")
             search_terms_data = []
             stream = ga_service.search_stream(
                 customer_id=customer_id,
@@ -110,10 +137,11 @@ class GoogleAdsConnector:
 
         except GoogleAdsException as ex:
             for error in ex.failure.errors:
-                st.error(f"Google Ads API error: {error.message}")
-                logger.error(f"Google Ads API error: {error.message}")
+                error_msg = f"Google Ads API error: {error.message}"
                 if hasattr(error, 'details'):
-                    logger.error(f"Error details: {error.details}")
+                    error_msg += f"\nDetails: {error.details}"
+                st.error(error_msg)
+                logger.error(error_msg)
             return None
         except Exception as e:
             st.error(f"Error fetching search terms: {str(e)}")
