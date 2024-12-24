@@ -1,138 +1,102 @@
-import re
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords
-from typing import Union, List, Optional, Dict
+import string
+import re
 
 # Download required NLTK data
 try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
-
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
     nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+except Exception as e:
+    print(f"Warning: Could not download NLTK data: {str(e)}")
 
-STOPWORDS = set(stopwords.words('english'))
-
-def load_csv_in_chunks(
-    file,
-    text_column: str,
-    chunksize: int = 100000,
-    max_rows: int = 1000000
-) -> pd.DataFrame:
-    """
-    Efficiently load a CSV file in chunks (up to 1 million rows).
-    :param file: The uploaded file handle from Streamlit.
-    :param text_column: Name of the column containing text data.
-    :param chunksize: Number of rows to load per chunk.
-    :param max_rows: Maximum number of rows to load overall.
-    :return: A pandas DataFrame with text.
-    """
+def get_stopwords():
     try:
-        # Read the first chunk to get column names
-        first_chunk = pd.read_csv(file, nrows=1)
+        return set(stopwords.words('english'))
+    except LookupError:
+        print("Warning: Using empty stopwords set as NLTK data couldn't be loaded")
+        return set()
 
-        # Check if the column exists (case-sensitive)
-        if text_column not in first_chunk.columns:
-            # Try to find a case-insensitive match
-            col_map = {col.lower(): col for col in first_chunk.columns}
-            if text_column.lower() in col_map:
-                text_column = col_map[text_column.lower()]
-            else:
-                available_columns = "\n- ".join(first_chunk.columns)
-                raise ValueError(f"Column '{text_column}' not found. Available columns are:\n- {available_columns}")
-
-        # Reset file pointer
-        file.seek(0)
-
-        # Read the file in chunks
-        dfs = []
-        rows_loaded = 0
-        for chunk in pd.read_csv(file, chunksize=chunksize):
-            dfs.append(chunk[[text_column]])
-            rows_loaded += len(chunk)
-            if rows_loaded >= max_rows:
-                break
-
-        if not dfs:
-            raise ValueError("No data was read from the file")
-
-        return pd.concat(dfs, ignore_index=True)
-    except Exception as e:
-        raise ValueError(f"Error reading CSV: {str(e)}")
-
-def preprocess_text(
-    text: str,
-    remove_stopwords: bool = True,
-    remove_punctuation: bool = True,
-    lowercase: bool = True,
-    custom_stopwords: Optional[List[str]] = None
-) -> str:
+def preprocess_dataframe(df, text_column, remove_stopwords=True, 
+                        remove_punctuation=True, lowercase=True,
+                        custom_stopwords=None):
     """
-    Apply basic preprocessing to a single text string.
-    :param text: The original text.
-    :param remove_stopwords: Flag to remove stopwords.
-    :param remove_punctuation: Flag to remove punctuation.
-    :param lowercase: Flag to convert text to lowercase.
-    :param custom_stopwords: Additional user-provided stopwords.
-    :return: Cleaned text string.
+    Preprocess text data in a DataFrame.
+    
+    Parameters:
+    -----------
+    df : pandas.DataFrame
+        Input DataFrame containing text data
+    text_column : str
+        Name of column containing text to process
+    remove_stopwords : bool
+        Whether to remove stopwords
+    remove_punctuation : bool
+        Whether to remove punctuation
+    lowercase : bool
+        Whether to convert text to lowercase
+    custom_stopwords : list
+        Additional stopwords to remove
+        
+    Returns:
+    --------
+    pandas.DataFrame
+        DataFrame with processed text column added
     """
-    if lowercase:
-        text = text.lower()
-
-    if remove_punctuation:
-        # Remove punctuation using regex
-        text = re.sub(r'[^\w\s]', '', text)
-
-    tokens = text.split()
-
-    # Merge custom stopwords into our global set if provided
-    combined_stopwords = STOPWORDS.copy()
-    if custom_stopwords:
-        combined_stopwords.update([w.lower() for w in custom_stopwords])
-
+    
+    # Create a copy of the DataFrame
+    df_processed = df.copy()
+    
+    # Get stopwords if needed
     if remove_stopwords:
-        tokens = [t for t in tokens if t not in combined_stopwords]
+        stop_words = get_stopwords()
+        if custom_stopwords:
+            stop_words.update(custom_stopwords)
+    
+    def process_text(text):
+        # Convert to string if not already
+        text = str(text)
+        
+        # Lowercase if requested
+        if lowercase:
+            text = text.lower()
+            
+        # Remove punctuation if requested
+        if remove_punctuation:
+            text = text.translate(str.maketrans('', '', string.punctuation))
+            
+        # Split into words
+        words = text.split()
+        
+        # Remove stopwords if requested
+        if remove_stopwords:
+            words = [w for w in words if w not in stop_words]
+            
+        # Handle Google Ads specific patterns
+        words = clean_ads_terms(words)
+            
+        return ' '.join(words)
+    
+    # Apply preprocessing to text column
+    df_processed['processed_text'] = df_processed[text_column].apply(process_text)
+    
+    return df_processed
 
-    return " ".join(tokens)
-
-def preprocess_dataframe(
-    df: pd.DataFrame,
-    text_column: str,
-    remove_stopwords: bool = True,
-    remove_punctuation: bool = True,
-    lowercase: bool = True,
-    custom_stopwords: Optional[List[str]] = None
-) -> pd.DataFrame:
-    """
-    Apply text preprocessing to an entire dataframe's text column.
-    :param df: The DataFrame containing a column of text.
-    :param text_column: The column name to preprocess.
-    :param remove_stopwords: Flag to remove stopwords.
-    :param remove_punctuation: Flag to remove punctuation.
-    :param lowercase: Flag to convert text to lowercase.
-    :param custom_stopwords: Additional user-provided stopwords.
-    :return: DataFrame with a new column 'processed_text'.
-    """
-    # Make a copy to avoid SettingWithCopyWarning
-    df = df.copy()
-
-    # Handle missing values
-    df[text_column] = df[text_column].fillna('')
-
-    # Convert to string type using the new pandas string accessor
-    df[text_column] = df[text_column].astype('string')
-
-    df['processed_text'] = df[text_column].apply(
-        lambda x: preprocess_text(
-            str(x),
-            remove_stopwords=remove_stopwords,
-            remove_punctuation=remove_punctuation,
-            lowercase=lowercase,
-            custom_stopwords=custom_stopwords
-        )
-    )
-    return df
+def clean_ads_terms(words):
+    """Clean Google Ads specific patterns from search terms."""
+    cleaned_words = []
+    for word in words:
+        # Remove special Google Ads markers
+        word = re.sub(r'\+', '', word)  # Remove broad match modifiers
+        word = re.sub(r'^\[|\]$', '', word)  # Remove exact match brackets
+        word = re.sub(r'^\"|\"$', '', word)  # Remove phrase match quotes
+        
+        # Remove common Google Ads artifacts
+        word = re.sub(r'near\s?me', '', word)  # Remove "near me"
+        word = re.sub(r'best', '', word)  # Remove generic quality terms
+        
+        if word:  # Only add non-empty words
+            cleaned_words.append(word)
+    
+    return cleaned_words
