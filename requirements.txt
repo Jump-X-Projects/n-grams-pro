@@ -3,10 +3,10 @@ pandas>=1.5.3
 nltk>=3.8.1
 plotly>=5.13.1
 wordcloud>=1.8.2.2
-google-ads==19.1.0
-google-auth-oauthlib==0.4.6
-google-auth-httplib2==0.1.0
+google-ads>=22.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
 scikit-learn>=1.0.2
-grpcio==1.44.0
-protobuf==3.20.0
-google-api-core==2.11.0
+grpcio>=1.68.0
+protobuf>=4.21.0
+google-api-core>=2.11.0
