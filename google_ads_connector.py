@@ -25,74 +25,53 @@ class GoogleAdsConnector:
         if not customer_id.isdigit():
             return False, "Customer ID must contain only numbers"
 
-        # Don't pad - ensure it's exactly 10 digits
         if len(customer_id) != 10:
-            return False, f"Customer ID must be exactly 10 digits (got {len(customer_id)} digits)"
+            return False, f"Customer ID must be exactly 10 digits long (got {len(customer_id)} digits)"
 
         return True, customer_id
 
     def initialize_client(self):
         """Initialize Google Ads client with credentials from Streamlit secrets"""
         try:
-            logger.info("Initializing Google Ads client...")
-
-            # Get credentials from environment variables
-            developer_token = st.secrets["google_ads"]["developer_token"]
-            client_id = st.secrets["google_ads"]["client_id"]
-            client_secret = st.secrets["google_ads"]["client_secret"]
-            refresh_token = st.secrets["google_ads"]["refresh_token"]
-            login_customer_id = st.secrets["google_ads"]["login_customer_id"]
-
-            # Ensure login_customer_id is 10 digits
-            if len(login_customer_id) < 10:
-                login_customer_id = login_customer_id.zfill(10)
-
-            logger.info(f"Using login_customer_id: {login_customer_id}")
-
             credentials = {
-                'developer_token': developer_token,
-                'client_id': client_id,
-                'client_secret': client_secret,
-                'refresh_token': refresh_token,
-                'login_customer_id': login_customer_id,
+                'developer_token': st.secrets["google_ads"]["developer_token"],
+                'client_id': st.secrets["google_ads"]["client_id"],
+                'client_secret': st.secrets["google_ads"]["client_secret"],
+                'refresh_token': st.secrets["google_ads"]["refresh_token"],
+                'login_customer_id': st.secrets["google_ads"]["login_customer_id"],
                 'use_proto_plus': True
             }
 
-            logger.info("Creating Google Ads client...")
+            logger.info("Attempting to create Google Ads client...")
             self.client = GoogleAdsClient.load_from_dict(credentials)
-            logger.info("Google Ads client created successfully")
+            logger.info("Successfully created Google Ads client")
             return True
 
-        except KeyError as e:
-            st.error(f"Missing required Google Ads credential: {str(e)}")
-            logger.error(f"Missing credential: {str(e)}")
-            return False
         except Exception as e:
             st.error(f"Failed to initialize Google Ads client: {str(e)}")
-            logger.error(f"Client initialization error: {str(e)}", exc_info=True)
+            logger.error("Client initialization error", exc_info=True)
             return False
 
     def get_search_terms_report(self, customer_id, date_range='LAST_30_DAYS'):
         """Fetch search terms report from Google Ads"""
-        logger.info(f"Getting search terms report for customer ID: {customer_id}")
-
-        # Validate customer_id first
-        is_valid, result = self.validate_customer_id(customer_id)
-        if not is_valid:
-            st.error(f"Invalid customer ID: {result}")
-            logger.error(f"Customer ID validation failed: {result}")
-            return None
-
-        customer_id = result  # Use validated customer ID
-
-        if not self.client:
-            logger.info("No client found, attempting to initialize...")
-            if not self.initialize_client():
+        try:
+            # Validate customer_id
+            is_valid, result = self.validate_customer_id(customer_id)
+            if not is_valid:
+                st.error(f"Invalid customer ID: {result}")
                 return None
 
-        try:
+            customer_id = result  # Use validated customer ID
+            logger.info(f"Using customer ID: {customer_id}")
+
+            if not self.client:
+                logger.info("No client found, attempting to initialize...")
+                if not self.initialize_client():
+                    return None
+
             logger.info("Getting Google Ads service...")
             ga_service = self.client.get_service("GoogleAdsService")
+            logger.info("Successfully got Google Ads service")
 
             query = """
                 SELECT
@@ -105,7 +84,7 @@ class GoogleAdsConnector:
                 WHERE segments.date DURING {date_range}
             """.format(date_range=date_range)
 
-            logger.info(f"Executing query for customer ID {customer_id}")
+            logger.info("Executing search stream query...")
             search_terms_data = []
             stream = ga_service.search_stream(
                 customer_id=customer_id,
@@ -124,7 +103,6 @@ class GoogleAdsConnector:
 
             if not search_terms_data:
                 st.warning("No search terms data found for the specified date range")
-                logger.warning("No data found in search terms report")
                 return None
 
             logger.info(f"Successfully retrieved {len(search_terms_data)} search terms")
@@ -132,12 +110,12 @@ class GoogleAdsConnector:
 
         except GoogleAdsException as ex:
             for error in ex.failure.errors:
-                error_message = f'Google Ads API error: {error.message}'
-                st.error(error_message)
-                logger.error(error_message)
+                st.error(f"Google Ads API error: {error.message}")
+                logger.error(f"Google Ads API error: {error.message}")
+                if hasattr(error, 'details'):
+                    logger.error(f"Error details: {error.details}")
             return None
         except Exception as e:
-            error_message = f"Error fetching search terms: {str(e)}"
-            st.error(error_message)
-            logger.error(error_message, exc_info=True)
+            st.error(f"Error fetching search terms: {str(e)}")
+            logger.error("Error in get_search_terms_report", exc_info=True)
             return None
